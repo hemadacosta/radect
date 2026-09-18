@@ -15,7 +15,7 @@
 window.RADECT_SETTINGS = {
   // Cole aqui a URL do Cloudflare Worker depois de publicá-lo.
   // Exemplo: https://radect-drive-proxy.SEUNOME.workers.dev
-  proxyBase: "https://SEU-WORKER.workers.dev"
+  proxyBase: "https://radect-pdf-proxy.hemadacosta.workers.dev"
 };
 
 window.RADECT_EDITIONS = [
