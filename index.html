@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>RADECT — Revista Digital</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand" aria-live="polite">
+        <strong id="editionTitle">RADECT</strong>
+        <span id="editionSubtitle">Revista Acadêmica da Disciplina Ensino de Ciência e Tecnologia</span>
+      </div>
+
+      <nav class="toolbar" aria-label="Controles da revista">
+        <button id="prevBtn" type="button" title="Página anterior" aria-label="Página anterior">◀</button>
+        <button id="nextBtn" type="button" title="Próxima página" aria-label="Próxima página">▶</button>
+        <span id="pageIndicator" class="page-indicator" aria-live="polite">—</span>
+        <button id="zoomOutBtn" type="button" title="Diminuir zoom" aria-label="Diminuir zoom">−</button>
+        <button id="zoomResetBtn" type="button" title="Restaurar zoom" aria-label="Restaurar zoom">100%</button>
+        <button id="zoomInBtn" type="button" title="Aumentar zoom" aria-label="Aumentar zoom">+</button>
+        <button id="fullscreenBtn" type="button" title="Tela cheia" aria-label="Tela cheia">⛶</button>
+        <a id="openPdf" class="button-link" href="#" target="_blank" rel="noopener" title="Abrir o PDF original no Google Drive">PDF</a>
+      </nav>
+
+      <div class="edition-picker">
+        <label for="editionSelect">Edição</label>
+        <select id="editionSelect" aria-label="Escolha uma edição"></select>
+      </div>
+    </header>
+
+    <section class="reader-shell" aria-label="Leitor da revista">
+      <div id="book-stage">
+        <div id="book"></div>
+      </div>
+    </section>
+
+    <footer id="status" class="status" aria-live="polite">Use as setas do teclado ou os botões para folhear.</footer>
+  </main>
+
+  <div id="loading" class="loading show" aria-hidden="false">
+    <div class="loading-card" role="status">
+      <strong>RADECT</strong>
+      <span id="loadingText">Preparando a revista…</span>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
