@@ -55,18 +55,35 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid
   flex: 1;
   min-height: 0;
   padding: 18px;
-  display: grid;
-  place-items: center;
+  display: block;
   overflow: auto;
+  position: relative;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
+
+/* Em zoom acima de 100%, a área pode ser arrastada com o mouse. */
+.reader-shell.is-pannable {
+  cursor: grab;
+  touch-action: none;
+}
+.reader-shell.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
 #book-stage {
   width: min(1180px, 96vw);
   height: min(79vh, 900px);
   min-height: 520px;
   display: grid;
   place-items: center;
+  margin: 0 auto;
   transition: transform .2s ease;
-  transform-origin: center center;
+
+  /* Importante: o zoom cresce a partir do topo, para que a parte superior
+     nunca fique em uma área de rolagem negativa/inacessível. */
+  transform-origin: top left;
 }
 #book { margin: auto; }
 .page {
