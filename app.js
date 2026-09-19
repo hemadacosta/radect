@@ -8,6 +8,7 @@
     subtitle: document.getElementById('editionSubtitle'),
     book: document.getElementById('book'),
     stage: document.getElementById('book-stage'),
+    reader: document.querySelector('.reader-shell'),
     page: document.getElementById('pageIndicator'),
     loading: document.getElementById('loading'),
     loadingText: document.getElementById('loadingText'),
@@ -19,6 +20,13 @@
   let currentPdf = null;
   let currentEdition = null;
   let zoom = 1;
+
+  // Som sutil de folha virando, gerado pelo próprio navegador.
+  // Não exige arquivo MP3/WAV adicional no GitHub.
+  const PAGE_SOUND_ENABLED = true;
+  const PAGE_SOUND_VOLUME = 0.11;
+  let audioContext = null;
+  let audioUnlocked = false;
 
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -135,6 +143,59 @@
     return dimensions;
   }
 
+  function unlockAudio() {
+    if (!PAGE_SOUND_ENABLED) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioContext) audioContext = new AudioCtx();
+      if (audioContext.state === 'suspended') audioContext.resume();
+      audioUnlocked = true;
+    } catch (_) {}
+  }
+
+  function playPageTurnSound() {
+    if (!PAGE_SOUND_ENABLED || !audioUnlocked || !audioContext) return;
+
+    try {
+      const ctx = audioContext;
+      const duration = 0.24;
+      const length = Math.max(1, Math.floor(ctx.sampleRate * duration));
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      // Ruído curto com envelope assimétrico para lembrar papel deslizando.
+      for (let i = 0; i < length; i++) {
+        const t = i / length;
+        const attack = Math.min(1, t / 0.06);
+        const decay = Math.pow(1 - t, 2.4);
+        data[i] = (Math.random() * 2 - 1) * attack * decay;
+      }
+
+      const source = ctx.createBufferSource();
+      const highpass = ctx.createBiquadFilter();
+      const bandpass = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      highpass.type = 'highpass';
+      highpass.frequency.setValueAtTime(450, ctx.currentTime);
+      bandpass.type = 'bandpass';
+      bandpass.frequency.setValueAtTime(1850, ctx.currentTime);
+      bandpass.Q.setValueAtTime(0.7, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(PAGE_SOUND_VOLUME, ctx.currentTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+
+      source.buffer = buffer;
+      source.connect(highpass);
+      highpass.connect(bandpass);
+      bandpass.connect(gain);
+      gain.connect(ctx.destination);
+      source.start();
+    } catch (_) {}
+  }
+
   async function loadEdition(edition) {
     if (!edition) return;
     currentEdition = edition;
@@ -181,7 +242,10 @@
       });
 
       pageFlip.loadFromHTML(document.querySelectorAll('.page'));
-      pageFlip.on('flip', ({ data }) => updatePageLabel(data));
+      pageFlip.on('flip', ({ data }) => {
+        updatePageLabel(data);
+        playPageTurnSound();
+      });
       pageFlip.on('changeOrientation', () => updatePageLabel(pageFlip.getCurrentPageIndex()));
       updatePageLabel(0);
       setLoading(false);
@@ -204,8 +268,81 @@
   function applyZoom(next) {
     zoom = Math.max(.75, Math.min(1.6, next));
     els.stage.style.transform = `scale(${zoom})`;
-    els.status.textContent = `Zoom: ${Math.round(zoom * 100)}%`;
+
+    // Em zoom > 100%, habilita o modo de arrastar para navegar pela página.
+    els.reader.classList.toggle('is-pannable', zoom > 1.001);
+
+    // Ao voltar a 100% ou menos, retorna ao início para evitar ficar "preso"
+    // em uma posição de rolagem criada durante o zoom.
+    if (zoom <= 1.001) {
+      els.reader.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    }
+
+    els.status.textContent = zoom > 1.001
+      ? `Zoom: ${Math.round(zoom * 100)}% · arraste a revista com o mouse para mover a página.`
+      : `Zoom: ${Math.round(zoom * 100)}%`;
   }
+
+  // Arrastar para navegar pela revista quando o zoom estiver acima de 100%.
+  // Usamos a fase de captura para impedir que o gesto seja interpretado
+  // simultaneamente pelo PageFlip como uma tentativa de virar a página.
+  let panning = false;
+  let panPointerId = null;
+  let panStartX = 0;
+  let panStartY = 0;
+  let panStartLeft = 0;
+  let panStartTop = 0;
+
+  function beginPan(event) {
+    if (zoom <= 1.001 || event.button !== 0) return;
+
+    panning = true;
+    panPointerId = event.pointerId;
+    panStartX = event.clientX;
+    panStartY = event.clientY;
+    panStartLeft = els.reader.scrollLeft;
+    panStartTop = els.reader.scrollTop;
+    els.reader.classList.add('is-panning');
+
+    try { els.reader.setPointerCapture(event.pointerId); } catch (_) {}
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function movePan(event) {
+    if (!panning || event.pointerId !== panPointerId) return;
+
+    const dx = event.clientX - panStartX;
+    const dy = event.clientY - panStartY;
+    els.reader.scrollLeft = panStartLeft - dx;
+    els.reader.scrollTop = panStartTop - dy;
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function endPan(event) {
+    if (!panning || event.pointerId !== panPointerId) return;
+
+    panning = false;
+    els.reader.classList.remove('is-panning');
+    try { els.reader.releasePointerCapture(event.pointerId); } catch (_) {}
+    panPointerId = null;
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  // Os navegadores só liberam áudio depois da primeira interação do usuário.
+  // A primeira ação (clique, toque ou tecla) apenas habilita o áudio;
+  // a partir daí, cada virada de página produz o som.
+  window.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
+  window.addEventListener('keydown', unlockAudio, { once: true, capture: true });
+
+  els.reader.addEventListener('pointerdown', beginPan, true);
+  els.reader.addEventListener('pointermove', movePan, true);
+  els.reader.addEventListener('pointerup', endPan, true);
+  els.reader.addEventListener('pointercancel', endPan, true);
 
   document.getElementById('prevBtn').addEventListener('click', () => pageFlip?.flipPrev());
   document.getElementById('nextBtn').addEventListener('click', () => pageFlip?.flipNext());
